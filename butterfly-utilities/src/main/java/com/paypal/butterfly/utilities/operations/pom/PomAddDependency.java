@@ -1,10 +1,21 @@
 package com.paypal.butterfly.utilities.operations.pom;
 
 import com.paypal.butterfly.extensions.api.TOExecutionResult;
+import com.paypal.butterfly.extensions.api.TransformationContext;
 import com.paypal.butterfly.extensions.api.exception.TransformationOperationException;
 import com.paypal.butterfly.extensions.api.operations.AddElement;
+import com.paypal.butterfly.utilities.operations.pom.stax.EndElementEventCondition;
+import com.paypal.butterfly.utilities.operations.pom.stax.StartElementEventCondition;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+
+import javax.xml.stream.XMLEventReader;
+import javax.xml.stream.XMLEventWriter;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.events.XMLEvent;
+import java.io.File;
+import java.io.IOException;
 
 /**
  * Adds a new dependency to a POM file.
@@ -13,7 +24,7 @@ import org.apache.maven.model.Model;
  *
  * @author facarvalho
  */
-public class PomAddDependency extends AbstractArtifactPomOperation<PomAddDependency> implements AddElement<PomAddDependency> {
+public class PomAddDependency extends AbstractStaxArtifactPomOperation<PomAddDependency> implements AddElement<PomAddDependency>{
 
     // TODO
     // Add pre-validation to check, in case version was not set, if dependency
@@ -124,12 +135,13 @@ public class PomAddDependency extends AbstractArtifactPomOperation<PomAddDepende
     }
 
     @Override
-    protected TOExecutionResult pomExecution(String relativePomFile, Model model) {
-        Dependency dependency;
+    protected TOExecutionResult pomExecution(File transformedAppFolder, TransformationContext transformationContext) throws XmlPullParserException, XMLStreamException, IOException {
+        // Get the main pom file
+        File pomFile = getAbsoluteFile(transformedAppFolder, transformationContext);
+        int dependencyIndex= getDependencyIndex(getModel(pomFile));
         Exception warning = null;
 
-        dependency = getDependency(model);
-        if (dependency != null) {
+        if (dependencyIndex != -1) {
             String message = String.format("Dependency %s:%s is already present in %s", groupId, artifactId, getRelativePath());
 
             switch (ifPresent) {
@@ -150,24 +162,89 @@ public class PomAddDependency extends AbstractArtifactPomOperation<PomAddDepende
             }
         }
 
-        dependency = new Dependency();
-        dependency.setGroupId(groupId);
-        dependency.setArtifactId(artifactId);
+        // Create new dependency
+        Dependency newDependency = new Dependency();
+        newDependency.setGroupId(groupId);
+        newDependency.setArtifactId(artifactId);
         if (version != null) {
-            dependency.setVersion(version);
+            newDependency.setVersion(version);
         }
         if (scope != null) {
-            dependency.setScope(scope);
+            newDependency.setScope(scope);
         }
-        model.addDependency(dependency);
-        String details = String.format("Dependency %s:%s%s has been added to POM file %s", groupId, artifactId, (version == null ? "" : ":"+ version), relativePomFile);
-        TOExecutionResult result = TOExecutionResult.success(this, details);
+
+        XMLEventReader reader = getReader(transformedAppFolder, transformationContext);
+        XMLEventWriter writer = getWriter(transformedAppFolder, transformationContext);
+        XMLEvent indentation = getIndentation(transformedAppFolder, transformationContext);
+
+        TOExecutionResult result = null;
+
+        if(dependencyIndex != -1){
+            copyUntil(reader, writer, new StartElementEventCondition("dependencies"), true);
+            for (int i=0; i<dependencyIndex; i++){
+                copyUntil(reader,writer,new EndElementEventCondition("dependency"), true);
+            }
+            skipUntil(reader,new EndElementEventCondition("dependency"));
+            // now replace the dependency
+            writeNewDependency(writer,indentation,newDependency);
+
+            String details = String.format("Dependency %s:%s%s has been added to POM file %s", groupId, artifactId, (version == null ? "" : ":"+ version), pomFile.getAbsolutePath());
+            result = TOExecutionResult.success(this, details);
+        } else {
+            //
+            // There are two scenarios here
+            // the <dependencies></dependencies> doesn't exists completely
+            // an empty <dependencies></dependencies> exists
+            copyUntil(reader,writer,new StartElementEventCondition("dependencies"),true);
+            writeNewDependency(writer,indentation,newDependency);
+
+            String details = String.format("Dependency %s:%s%s has been added to POM file %s", groupId, artifactId, (version == null ? "" : ":"+ version), pomFile.getAbsolutePath());
+            result = TOExecutionResult.success(this, details);
+        }
+        writer.add(reader);
 
         if (warning != null) {
             result.addWarning(warning);
         }
-
         return result;
+    }
+
+    private void writeNewDependency(XMLEventWriter writer, XMLEvent indentation, Dependency newDependency) throws XMLStreamException {
+        writer.add(LINE_FEED);
+        writeMultiple(writer, indentation, 2);
+        writer.add(eventFactory.createStartElement("", "", "dependency"));
+        writer.add(LINE_FEED);
+        writeMultiple(writer, indentation, 3);
+
+        writer.add(eventFactory.createStartElement("", "", "groupId"));
+        writer.add(eventFactory.createCharacters(newDependency.getGroupId()));
+        writer.add(eventFactory.createEndElement("", "", "groupId"));
+        writer.add(LINE_FEED);
+
+        writeMultiple(writer, indentation, 3);
+        writer.add(eventFactory.createStartElement("", "", "artifactId"));
+        writer.add(eventFactory.createCharacters(newDependency.getArtifactId()));
+        writer.add(eventFactory.createEndElement("", "", "artifactId"));
+        writer.add(LINE_FEED);
+
+        if(newDependency.getVersion() != null){
+            writeMultiple(writer, indentation, 3);
+            writer.add(eventFactory.createStartElement("", "", "version"));
+            writer.add(eventFactory.createCharacters(newDependency.getVersion()));
+            writer.add(eventFactory.createEndElement("", "", "version"));
+            writer.add(LINE_FEED);
+        }
+
+        if (newDependency.getScope()!=null){
+            writeMultiple(writer, indentation, 3);
+            writer.add(eventFactory.createStartElement("", "", "scope"));
+            writer.add(eventFactory.createCharacters(newDependency.getScope()));
+            writer.add(eventFactory.createEndElement("", "", "scope"));
+            writer.add(LINE_FEED);
+        }
+
+        writeMultiple(writer, indentation, 2);
+        writer.add(eventFactory.createEndElement("", "","dependency"));
     }
 
 }

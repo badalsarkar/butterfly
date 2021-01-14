@@ -1,7 +1,10 @@
 package com.paypal.butterfly.utilities.operations.pom;
 
 import com.paypal.butterfly.extensions.api.exception.TransformationDefinitionException;
+import org.apache.maven.model.Dependency;
+import org.apache.maven.model.Model;
 
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -69,6 +72,44 @@ public abstract class AbstractStaxArtifactPomOperation<T extends AbstractStaxArt
     @Override
     public int hashCode() {
         return hashCode(super.hashCode(), groupId, artifactId);
+    }
+
+    protected Dependency getDependency(Model model) {
+        return getDependencyInList(model.getDependencies(), groupId, artifactId);
+    }
+
+    private Dependency getDependencyInList(List<Dependency> dependencyList, String groupId, String artifactId) {
+        if (dependencyList == null || dependencyList.size() == 0) {
+            return null;
+        }
+
+        Dependency dependency = null;
+        for (Dependency d : dependencyList) {
+            if(d.getArtifactId().equals(artifactId) && d.getGroupId().equals(groupId)) {
+                dependency = d;
+                break;
+            }
+        }
+
+        return dependency;
+    }
+
+    //TODO unit test
+    protected int getDependencyIndex(Model model){
+        List<Dependency> dependencyList= model.getDependencies();
+        int index=-1;
+
+        if (dependencyList==null || dependencyList.size()==0){
+            return index;
+        }
+
+        for (int i=0; i<dependencyList.size(); i++) {
+            if (dependencyList.get(i).getArtifactId().equals(artifactId) && dependencyList.get(i).getGroupId().equals(groupId)) {
+                index=i;
+                break;
+            }
+        }
+        return index;
     }
 
 }

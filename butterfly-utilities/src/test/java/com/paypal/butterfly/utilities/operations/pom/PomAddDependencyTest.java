@@ -31,7 +31,7 @@ public class PomAddDependencyTest extends TransformationUtilityTestHelper {
         Assert.assertEquals(dependencyAfterChange.getArtifactId(), "spring-batch-core");
         Assert.assertEquals(dependencyAfterChange.getVersion(), "3.0.7.RELEASE");
         Assert.assertEquals(dependencyAfterChange.getScope(), null);
-
+        // Check indentation
     }
 
     @Test
@@ -87,10 +87,7 @@ public class PomAddDependencyTest extends TransformationUtilityTestHelper {
         Assert.assertNull(executionResult.getException());
         Dependency dependencyAfterChange = getDependencyInList(getTransformedPomModel("pom.xml"), "xmlunit", "xmlunit", "1.7");
         Assert.assertNull(dependencyAfterChange);
-
-// FIXME
-// Uncomment this when STAX based version of this TO is implemented
-//        assertNotChangedFile("pom.xml");
+        assertNotChangedFile("pom.xml");
     }
 
     @Test
@@ -101,6 +98,7 @@ public class PomAddDependencyTest extends TransformationUtilityTestHelper {
         Assert.assertEquals(executionResult.getType(), TOExecutionResult.Type.WARNING);
         Assert.assertNull(executionResult.getException());
         Dependency dependencyAfterChange = getDependencyInList(getTransformedPomModel("pom.xml"), "xmlunit", "xmlunit", "1.7");
+
         Assert.assertNotNull(dependencyAfterChange);
     }
 
@@ -165,7 +163,7 @@ public class PomAddDependencyTest extends TransformationUtilityTestHelper {
         return dependencyAfterChange;
     }
 
-    private void executeAndAssertSuccess(AbstractPomOperation<?> pomOperation) {
+    private void executeAndAssertSuccess(AbstractStaxPomOperation<?> pomOperation){
         TOExecutionResult executionResult = pomOperation.execution(transformedAppFolder, transformationContext);
         Assert.assertEquals(executionResult.getType(), TOExecutionResult.Type.SUCCESS);
     }
